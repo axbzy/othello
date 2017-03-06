@@ -1,11 +1,15 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
-#include <cmath>
+#include <cstdlib>
+#include <ctime>
+#include <unordered_map>
 
 enum Side { 
     WHITE, BLACK
 };
+
+#define OTHER(x) (x == BLACK) ? WHITE : BLACK
 
 class Move {
    

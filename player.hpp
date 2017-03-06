@@ -8,6 +8,10 @@ using namespace std;
 
 class Player {
 
+    Board *pos;
+    Side side;
+    Move* random_move(Board *pos);
+
 public:
     Player(Side side);
     ~Player();
