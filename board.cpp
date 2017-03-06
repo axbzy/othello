@@ -178,3 +178,57 @@ void Board::setBoard(char data[]) {
         }
     }
 }
+
+int Board::basic_heuristic(int corner, int edge, Side side) {
+    int score = 0, mult;
+    for(int i = 1; i < 7; i++) {
+        for(int j = 1; j < 7; j++) {
+            if (!taken[i + 8 * j]) continue;
+            mult = get(side, i, j) ? 1 : -1;
+            score += mult;
+        }
+    }
+    for(int i = 1; i < 7; i++) {
+        mult = ((int)(taken[i + 8 * 0])) * (get(side, i, 0) ? 1 : -1);
+        score += mult * edge;
+        mult = ((int)(taken[0 + 8 * i])) * (get(side, 0, i) ? 1 : -1);
+        score += mult * edge;
+        mult = ((int)(taken[i + 8 * 7])) * (get(side, i, 7) ? 1 : -1);
+        score += mult * edge;
+        mult = ((int)(taken[7 + 8 * i])) * (get(side, 7, i) ? 1 : -1);
+        score += mult * edge;
+    }
+    mult = ((int)(taken[7 + 8 * 0])) * (get(side, 7, 0) ? 1 : -1);
+    score += mult * corner;
+    mult = ((int)(taken[0 + 8 * 0])) * (get(side, 0, 0) ? 1 : -1);
+    score += mult * corner;
+    mult = ((int)(taken[7 + 8 * 7])) * (get(side, 7, 7) ? 1 : -1);
+    score += mult * corner;
+    mult = ((int)(taken[7 + 8 * 0])) * (get(side, 7, 0) ? 1 : -1);
+    score += mult * corner;
+    return score;
+}
+
+Move* Board::best_move(Side side, int corner, int edge) {
+    int score;
+    map<int, int> moves;
+    Board *aux;
+    for(int i = 0; i < 64; i++) {
+        Move *move = new Move(i / 8, i % 8);
+        if(this->checkMove(move, side)) {
+            aux = this->copy();
+            aux->doMove(move, side);
+            if(aux->taken.count() > 48) {
+                score = aux->count(side);
+            } else {
+                score = aux->basic_heuristic(corner, edge, side);
+            }
+            moves.insert({{score, i}});
+        }
+        delete move;
+    }
+    if(moves.empty()) return nullptr;
+    int n = moves.crbegin()->second;
+    cerr << moves.crbegin()->first << endl;
+    return new Move(n / 8, n % 8);
+}

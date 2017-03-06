@@ -1,9 +1,13 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
+#include <iostream>
 #include <cstdlib>
 #include <ctime>
+#include <map>
 #include <unordered_map>
+
+using namespace std;
 
 enum Side { 
     WHITE, BLACK

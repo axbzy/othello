@@ -41,7 +41,7 @@ Move *Player::doMove(Move *opponentsMove, int msLeft) {
 
     pos->doMove(opponentsMove, OTHER(side));
 
-    Move *m = random_move(pos);
+    Move *m = pos->best_move(side, 4, 2);
     
     pos->doMove(m, side);
 

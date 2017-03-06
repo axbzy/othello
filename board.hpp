@@ -29,6 +29,9 @@ public:
     int countBlack();
     int countWhite();
 
+    int basic_heuristic(int corner, int edge, Side side);
+    Move* best_move(Side side, int corner, int edge);
+
     void setBoard(char data[]);
 };
 
