@@ -162,6 +162,10 @@ int Board::countWhite() {
     return taken.count() - black.count();
 }
 
+int Board::count_moves(Side side) {
+    return 0;
+}
+
 /*
  * Sets the board state given an 8x8 char array where 'w' indicates a white
  * piece and 'b' indicates a black piece. Mainly for testing purposes.
@@ -232,3 +236,70 @@ Move* Board::best_move(Side side, int corner, int edge) {
     cerr << moves.crbegin()->first << endl;
     return new Move(n / 8, n % 8);
 }
+
+BoardNode::BoardNode(Board *pos, Side side, BoardNode *parent, Move *last,
+        int depth, bool testminimax) {
+    this->pos = pos;
+    this->side = side;
+    this->parent = parent;
+    this->last = last;
+    this->depth = depth;
+    this->response = nullptr;
+    this->testminimax = testminimax;
+    this->score = (testminimax) ? pos->basic_heuristic(1, 1, side)
+                                : pos->basic_heuristic(6, 1, side);
+}
+
+BoardNode::~BoardNode() {
+    free_children();
+}
+
+void BoardNode::free_children() {
+    if(children.size() == 0) return;
+    for(auto it = children.begin(); it != children.end(); it++) {
+        (*it)->free_children();
+        delete *it;
+    }
+}
+
+void BoardNode::add_children() {
+    if(children.size() != 0) return;
+    children.resize(pos->count_moves(side));
+    Move *m;
+    for(int i = 0; i < 8; i++) {
+        for(int j = 0; j < 8; j++) {
+            m = new Move(i, j);
+            if(!pos->checkMove(m, side)) {
+                delete m;
+                continue;
+            }
+            Board *aux = pos->copy();
+            aux->doMove(m, side);
+            BoardNode *child = 
+                new BoardNode(aux, OTHER(side), this, m, depth + 1,
+                        testminimax);
+            children.push_back(child);
+        }
+    }
+}
+
+void BoardNode::update_score() {
+    if(children.size() == 0) return;
+    int new_score;
+    new_score = children[0]->score;
+    response = children[0]->last;
+    for(unsigned int i = 1; i < children.size(); i++) {
+        if(depth % 2 == 1) {
+            if(children[i]->score < new_score) {
+                new_score = children[i]->score;
+                response = children[i]->last;
+            }
+        } else {
+            if(children[i]->score > new_score) {
+                new_score = children[i]->score;
+                response = children[i]->last;
+            }
+        }
+    }
+}
+

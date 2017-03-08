@@ -22,6 +22,7 @@ Player::Player(Side side) {
  * Destructor for the player.
  */
 Player::~Player() {
+    delete pos;
 }
 
 /*
@@ -41,10 +42,33 @@ Move *Player::doMove(Move *opponentsMove, int msLeft) {
 
     pos->doMove(opponentsMove, OTHER(side));
 
-    Move *m = pos->best_move(side, 4, 2);
+    Move *m;
+    //m = pos->best_move(side, 4, 2);
+
+    int desired_depth;
+    desired_depth = (testingMinimax) ? 2 : 2;
+    root = new BoardNode(pos, side, nullptr, nullptr, 0, testingMinimax);
+    int comp = 0;
+    for(int depth = 1; depth <= desired_depth; depth++) {
+        stack<BoardNode*> s;
+        s.push(root);
+        while(!s.empty()) {
+            BoardNode *top = s.top();
+            s.pop();
+            //cerr << (comp++) << endl;
+            if(top == nullptr || top->depth == desired_depth) continue;
+            top->add_children();
+            for(auto it = top->children.begin(); it != top->children.end();
+                    it++) {
+                s.push(*it);
+            }
+        }
+    }
+    root->update_score();
+    m = root->response;
+    //delete root;
     
     pos->doMove(m, side);
-
     return m;
 }
 
@@ -61,4 +85,8 @@ Move* Player::random_move(Board *pos) {
     srand(time(nullptr));
     int r = rand() % n, m = moves[r];
     return new Move(m / 8, m % 8);
+}
+
+void Player::setpos(Board *pos) {
+    this->pos = pos;
 }

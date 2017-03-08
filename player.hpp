@@ -10,6 +10,8 @@ class Player {
 
     Board *pos;
     Side side;
+    BoardNode *root;
+
     Move* random_move(Board *pos);
 
 public:
@@ -20,6 +22,7 @@ public:
 
     // Flag to tell if the player is running within the test_minimax context
     bool testingMinimax;
+    void setpos(Board *pos);
 };
 
 #endif

@@ -28,6 +28,7 @@ public:
     int count(Side side);
     int countBlack();
     int countWhite();
+    int count_moves(Side side);
 
     int basic_heuristic(int corner, int edge, Side side);
     Move* best_move(Side side, int corner, int edge);
@@ -35,4 +36,24 @@ public:
     void setBoard(char data[]);
 };
 
+class BoardNode {
+private:
+    void free_children();
+public:
+    bool testminimax;
+    int score, depth;
+    Side side;
+    Move *last, *response;
+    Board *pos;
+    BoardNode *parent;
+    vector<BoardNode*> children;
+
+    BoardNode(Board *pos, Side side, BoardNode *parent, Move *last,
+            int depth, bool testminimax);
+    ~BoardNode();
+
+    void add_children();
+    void update_score();
+
+};
 #endif
