@@ -1,309 +1,5 @@
 #include "board.hpp"
 
-/*
- * Make a standard 8x8 othello board and initialize it to the standard setup.
- */
-Board::Board() {
-    taken.set(3 + 8 * 3);
-    taken.set(3 + 8 * 4);
-    taken.set(4 + 8 * 3);
-    taken.set(4 + 8 * 4);
-    black.set(4 + 8 * 3);
-    black.set(3 + 8 * 4);
-}
-
-/*
- * Destructor for the board.
- */
-Board::~Board() {
-}
-
-/*
- * Returns a copy of this board.
- */
-Board *Board::copy() {
-    Board *newBoard = new Board();
-    newBoard->black = black;
-    newBoard->taken = taken;
-    return newBoard;
-}
-
-bool Board::occupied(int x, int y) {
-    return taken[x + 8*y];
-}
-
-bool Board::get(Side side, int x, int y) {
-    return occupied(x, y) && (black[x + 8*y] == (side == BLACK));
-}
-
-void Board::set(Side side, int x, int y) {
-    taken.set(x + 8*y);
-    black.set(x + 8*y, side == BLACK);
-}
-
-bool Board::onBoard(int x, int y) {
-    return(0 <= x && x < 8 && 0 <= y && y < 8);
-}
-
-
-/*
- * Returns true if the game is finished; false otherwise. The game is finished
- * if neither side has a legal move.
- */
-bool Board::isDone() {
-    return !(hasMoves(BLACK) || hasMoves(WHITE));
-}
-
-/*
- * Returns true if there are legal moves for the given side.
- */
-bool Board::hasMoves(Side side) {
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            Move move(i, j);
-            if (checkMove(&move, side)) return true;
-        }
-    }
-    return false;
-}
-
-/*
- * Returns true if a move is legal for the given side; false otherwise.
- */
-bool Board::checkMove(Move *m, Side side) {
-    // Passing is only legal if you have no moves.
-    if (m == nullptr) return !hasMoves(side);
-
-    int X = m->getX();
-    int Y = m->getY();
-
-    // Make sure the square hasn't already been taken.
-    if (occupied(X, Y)) return false;
-
-    Side other = (side == BLACK) ? WHITE : BLACK;
-    for (int dx = -1; dx <= 1; dx++) {
-        for (int dy = -1; dy <= 1; dy++) {
-            if (dy == 0 && dx == 0) continue;
-
-            // Is there a capture in that direction?
-            int x = X + dx;
-            int y = Y + dy;
-            if (onBoard(x, y) && get(other, x, y)) {
-                do {
-                    x += dx;
-                    y += dy;
-                } while (onBoard(x, y) && get(other, x, y));
-
-                if (onBoard(x, y) && get(side, x, y)) return true;
-            }
-        }
-    }
-    return false;
-}
-
-/*
- * Modifies the board to reflect the specified move.
- */
-void Board::doMove(Move *m, Side side) {
-    // A nullptr move means pass.
-    if (m == nullptr) return;
-
-    // Ignore if move is invalid.
-    if (!checkMove(m, side)) return;
-
-    int X = m->getX();
-    int Y = m->getY();
-    Side other = (side == BLACK) ? WHITE : BLACK;
-    for (int dx = -1; dx <= 1; dx++) {
-        for (int dy = -1; dy <= 1; dy++) {
-            if (dy == 0 && dx == 0) continue;
-
-            int x = X;
-            int y = Y;
-            do {
-                x += dx;
-                y += dy;
-            } while (onBoard(x, y) && get(other, x, y));
-
-            if (onBoard(x, y) && get(side, x, y)) {
-                x = X;
-                y = Y;
-                x += dx;
-                y += dy;
-                while (onBoard(x, y) && get(other, x, y)) {
-                    set(side, x, y);
-                    x += dx;
-                    y += dy;
-                }
-            }
-        }
-    }
-    set(side, X, Y);
-}
-
-/*
- * Current count of given side's stones.
- */
-int Board::count(Side side) {
-    return (side == BLACK) ? countBlack() : countWhite();
-}
-
-/*
- * Current count of black stones.
- */
-int Board::countBlack() {
-    return black.count();
-}
-
-/*
- * Current count of white stones.
- */
-int Board::countWhite() {
-    return taken.count() - black.count();
-}
-
-int Board::count_moves(Side side) {
-    return 0;
-}
-
-/*
- * Sets the board state given an 8x8 char array where 'w' indicates a white
- * piece and 'b' indicates a black piece. Mainly for testing purposes.
- */
-void Board::setBoard(char data[]) {
-    taken.reset();
-    black.reset();
-    for (int i = 0; i < 64; i++) {
-        if (data[i] == 'b') {
-            taken.set(i);
-            black.set(i);
-        } if (data[i] == 'w') {
-            taken.set(i);
-        }
-    }
-}
-
-int Board::basic_heuristic(int corner, int edge, Side side) {
-    int score = 0, mult;
-    for(int i = 1; i < 7; i++) {
-        for(int j = 1; j < 7; j++) {
-            if (!taken[i + 8 * j]) continue;
-            mult = get(side, i, j) ? 1 : -1;
-            score += mult;
-        }
-    }
-    for(int i = 1; i < 7; i++) {
-        mult = ((int)(taken[i + 8 * 0])) * (get(side, i, 0) ? 1 : -1);
-        score += mult * edge;
-        mult = ((int)(taken[0 + 8 * i])) * (get(side, 0, i) ? 1 : -1);
-        score += mult * edge;
-        mult = ((int)(taken[i + 8 * 7])) * (get(side, i, 7) ? 1 : -1);
-        score += mult * edge;
-        mult = ((int)(taken[7 + 8 * i])) * (get(side, 7, i) ? 1 : -1);
-        score += mult * edge;
-    }
-    mult = ((int)(taken[7 + 8 * 0])) * (get(side, 7, 0) ? 1 : -1);
-    score += mult * corner;
-    mult = ((int)(taken[0 + 8 * 0])) * (get(side, 0, 0) ? 1 : -1);
-    score += mult * corner;
-    mult = ((int)(taken[7 + 8 * 7])) * (get(side, 7, 7) ? 1 : -1);
-    score += mult * corner;
-    mult = ((int)(taken[7 + 8 * 0])) * (get(side, 7, 0) ? 1 : -1);
-    score += mult * corner;
-    return score;
-}
-
-Move* Board::best_move(Side side, int corner, int edge) {
-    int score;
-    map<int, int> moves;
-    Board *aux;
-    for(int i = 0; i < 64; i++) {
-        Move *move = new Move(i / 8, i % 8);
-        if(this->checkMove(move, side)) {
-            aux = this->copy();
-            aux->doMove(move, side);
-            if(aux->taken.count() > 48) {
-                score = aux->count(side);
-            } else {
-                score = aux->basic_heuristic(corner, edge, side);
-            }
-            moves.insert({{score, i}});
-        }
-        delete move;
-    }
-    if(moves.empty()) return nullptr;
-    int n = moves.crbegin()->second;
-    cerr << moves.crbegin()->first << endl;
-    return new Move(n / 8, n % 8);
-}
-
-BoardNode::BoardNode(Board *pos, Side side, BoardNode *parent, Move *last,
-        int depth, bool testminimax) {
-    this->pos = pos;
-    this->side = side;
-    this->parent = parent;
-    this->last = last;
-    this->depth = depth;
-    this->response = nullptr;
-    this->testminimax = testminimax;
-    this->score = (testminimax) ? pos->basic_heuristic(1, 1, side)
-                                : pos->basic_heuristic(6, 1, side);
-}
-
-BoardNode::~BoardNode() {
-    free_children();
-}
-
-void BoardNode::free_children() {
-    if(children.size() == 0) return;
-    for(auto it = children.begin(); it != children.end(); it++) {
-        (*it)->free_children();
-        delete *it;
-    }
-}
-
-void BoardNode::add_children() {
-    if(children.size() != 0) return;
-    children.resize(pos->count_moves(side));
-    Move *m;
-    for(int i = 0; i < 8; i++) {
-        for(int j = 0; j < 8; j++) {
-            m = new Move(i, j);
-            if(!pos->checkMove(m, side)) {
-                delete m;
-                continue;
-            }
-            Board *aux = pos->copy();
-            aux->doMove(m, side);
-            BoardNode *child = 
-                new BoardNode(aux, OTHER(side), this, m, depth + 1,
-                        testminimax);
-            children.push_back(child);
-        }
-    }
-}
-
-void BoardNode::update_score() {
-    if(children.size() == 0) return;
-    int new_score;
-    new_score = children[0]->score;
-    response = children[0]->last;
-    for(unsigned int i = 1; i < children.size(); i++) {
-        if(depth % 2 == 1) {
-            if(children[i]->score < new_score) {
-                new_score = children[i]->score;
-                response = children[i]->last;
-            }
-        } else {
-            if(children[i]->score > new_score) {
-                new_score = children[i]->score;
-                response = children[i]->last;
-            }
-        }
-    }
-}
-
-
 sBoard do_move(sBoard pos, unsigned char move) {
     if(move == 64) {
        pos.side = OTHER(pos.side);
@@ -364,5 +60,111 @@ void disp(sBoard pos) {
             else cerr << '-';
         }
         cerr << endl;
+    }
+}
+
+int eval(sBoard pos) {
+    bitset<64> us(pos.black), them(pos.white);
+    int b = __builtin_popcountll(pos.black),
+        w = __builtin_popcountll(pos.white),
+        n_moves = 0, n_other_moves = 0, x, y, X, Y, ours, theirs;
+    ours = (pos.side == BLACK) ? b : w;
+    theirs = (pos.side == WHITE) ? b : w;
+    if(ours == 0) return MINF;
+    if(theirs == 0) return INF;
+
+    if(pos.side == WHITE) {
+        us ^= them;
+        them ^= us;
+        us ^= them;
+    }
+    unsigned long long ourull = us.to_ullong(), theirull = them.to_ullong();
+
+    for(unsigned char move = 0; move < 64; move++) {
+        if(us[move] || them[move]) continue;
+        X = move / 8;
+        Y = move % 8;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dy == 0 && dx == 0) continue;
+                // Is there a capture in that direction?
+                x = X + dx;
+                y = Y + dy;
+                if (in(x, y) && them[8*x + y]) {
+                    do {
+                        x += dx;
+                        y += dy;
+                    } while (in(x, y) && them[8*x + y]);
+                    if (in(x, y) && us[8*x + y]) {
+                        n_moves++;
+                    }
+                }
+                if (in(x, y) && us[8*x + y]) {
+                    do {
+                        x += dx;
+                        y += dy;
+                    } while (in(x, y) && us[8*x + y]);
+                    if (in(x, y) && them[8*x + y]) {
+                        n_other_moves++;
+                    }
+                }
+            }
+        }
+    }
+
+    if(n_moves == 0 && n_other_moves == 0) {
+        if(ours > theirs) return INF;
+        if(ours < theirs) return MINF;
+        return 0;
+    }
+    int stones = (STONES * (ours - theirs)) / (ours + theirs),
+        mobility = (MOBILITY * max(ENDM - w - b, 0) 
+                 * (n_moves - n_other_moves)) / (n_moves + n_other_moves),
+        board_heur = 0;
+    board_heur += __builtin_popcountll(ourull & CENTER_MASK)
+           - 15 * __builtin_popcountll(ourull & RING_MASK)
+           + 30 * __builtin_popcountll(ourull & EDGE_MASK)
+           - 100 * __builtin_popcountll(ourull & DANGER_MASK)
+           + 300 * __builtin_popcountll(ourull & CORNER_MASK);
+    board_heur -= __builtin_popcountll(theirull & CENTER_MASK)
+           - 15 * __builtin_popcountll(theirull & RING_MASK)
+           + 30 * __builtin_popcountll(theirull & EDGE_MASK)
+           - 100 * __builtin_popcountll(theirull & DANGER_MASK)
+           + 300 * __builtin_popcountll(theirull & CORNER_MASK);
+    board_heur *= HEUR * max(ENDH - w - b, 0);
+    return (stones + mobility + board_heur);
+}
+
+void move_list(sBoard pos, vector<unsigned char> &v) {
+    bitset<64> us(pos.black), them(pos.white);
+    int x, y, X, Y;
+
+    if(pos.side == WHITE) {
+        us ^= them;
+        them ^= us;
+        us ^= them;
+    }
+
+    for(unsigned char move = 0; move < 64; move++) {
+        if(us[move] || them[move]) continue;
+        X = move / 8;
+        Y = move % 8;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dy == 0 && dx == 0) continue;
+                // Is there a capture in that direction?
+                x = X + dx;
+                y = Y + dy;
+                if (in(x, y) && them[8*x + y]) {
+                    do {
+                        x += dx;
+                        y += dy;
+                    } while (in(x, y) && them[8*x + y]);
+                    if (in(x, y) && us[8*x + y]) {
+                        v.push_back(move);
+                    }
+                }
+            }
+        }
     }
 }

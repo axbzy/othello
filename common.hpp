@@ -3,13 +3,11 @@
 
 #include <iostream>
 #include <cstdlib>
-#include <ctime>
+#include <chrono>
 #include <limits>
 #include <algorithm>
-#include <map>
 #include <unordered_map>
 #include <unordered_set>
-#include <stack>
 #include <vector>
 
 using namespace std;
@@ -22,14 +20,12 @@ enum Side {
 #define in(x, y) x >= 0 && x < 8 && y >= 0 && y < 8
 #define INF (numeric_limits<int>::max() - 1)
 #define MINF -INF
-#define STONES 300
+#define STONES 700
 #define MOBILITY 500
 #define HEUR 1
-#define CORNERS 2000
 #define ENDM 42
-#define ENDC 48
 #define ENDH 48
-#define TABLE_CUTOFF 2000000
+#define TABLE_CUTOFF 1800000
 #define NODE_CUTOFF 8000000
 #define CENTER_MASK 0x3C3C3C3C0000ull
 #define RING_MASK 0x3C424242423C00ull

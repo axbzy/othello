@@ -9,7 +9,6 @@ Player::Player(Side side) {
     // Will be set to true in test_minimax.cpp.
     testingMinimax = false;
 
-    this->side = side;
     //pos = new Board();
     sroot.pos.white = (1ull << (8*3 + 3)) | (1ull << (8*4 + 4));
     sroot.pos.black = (1ull << (8*3 + 4)) | (1ull << (8*4 + 3));
@@ -26,7 +25,10 @@ Player::Player(Side side) {
  * Destructor for the player.
  */
 Player::~Player() {
-    delete pos;
+    for(auto it = sroot.children.begin(); 
+             it != sroot.children.end(); it++) {
+        prune(*it);
+    }
 }
 
 /*
@@ -43,27 +45,20 @@ Player::~Player() {
  * return nullptr.
  */
 Move *Player::doMove(Move *opponentsMove, int msLeft) {
-    //pos->doMove(opponentsMove, OTHER(side));
-    //unsigned char m;
-    //m = pos->best_move(side, 4, 2);
-
-    unsigned char o_move = 64;
+    start = system_clock::now();
+    int nstones = __builtin_popcountll(sroot.pos.black) 
+                + __builtin_popcountll(sroot.pos.white);
+    milliseconds total(msLeft);
+    overall = microseconds(total);
+    if(nstones != 46) early = (overall) / (46 - nstones);
+    if(nstones == 46 || early.count() < 0) early = (3 * overall) / 4;
+    late = overall / 2;
     vector<sBoardNode*>::iterator it, end;
     sBoard desired;
-    if(opponentsMove != nullptr) {
-        o_move = 8*opponentsMove->x + opponentsMove->y;
-        //cerr << opponentsMove->x << " " << opponentsMove->y << endl;
-    }
-    if( !(sroot.pos == opening) || o_move != 64 ) {
-        if(sroot.children.size() == 0) deepen_eval(sroot);
-        //cerr << "Desired: " << endl;
-        //disp(do_move(sroot.pos, o_move));
+    if(penultimate_move != -1) {
         end = sroot.children.end();
-        desired = do_move(sroot.pos, o_move);
         for(it = sroot.children.begin(); it != end; it++) {
-            //cerr << "Found: " << endl;
-            //disp( (*it)->pos );
-            //cerr << ((*it)->pos == do_move(sroot.pos, o_move)) << endl;
+            desired = do_move(sroot.pos, penultimate_move);
             if(!((*it)->pos == desired)) {
                 prune(*it);
                 *it = nullptr;
@@ -76,199 +71,114 @@ Move *Player::doMove(Move *opponentsMove, int msLeft) {
             }
         }
     }
-    //cerr << "Selected: " << endl;
-    //disp(sroot.pos);
-    //cerr << table.size() << endl;
+    unsigned char last_move = 64;
+    if(opponentsMove != nullptr) {
+        last_move = 8*opponentsMove->x + opponentsMove->y;
+    }
+    if( !(sroot.pos == opening) || last_move != 64 ) {
+        if(sroot.children.size() == 0) deepen_eval(sroot);
+        end = sroot.children.end();
+        desired = do_move(sroot.pos, last_move);
+        for(it = sroot.children.begin(); it != end; it++) {
+            if(!((*it)->pos == desired)) {
+                prune(*it);
+                *it = nullptr;
+            }
+        }
+        for(it = sroot.children.begin(); it != end; it++) {
+            if(*it != nullptr) {
+                sroot = *(*it);
+                break;
+            }
+        }
+    }
 
     unsigned char m = 0;
     int desired_depth = 8, oldk = 0, k;
-    int nstones = __builtin_popcountll(sroot.pos.black) + __builtin_popcountll(sroot.pos.white);
     if(nstones >= 4 && nstones <= 42) desired_depth = 6;
     desired_depth = 8;
-    if(nstones >= 46) desired_depth = 67 - nstones;
+    if(nstones >= 46) desired_depth = 66 - nstones;
+    if(desired_depth >= 12 && desired_depth <= 21) target = late;
+    else target = early;
+    cerr << "Target time: " << target.count() << "us" << endl;
+    if(target.count() > (long)msLeft * 1000l) {
+        milliseconds timeLeft(msLeft);
+        target = microseconds(timeLeft);
+    }
     for(int depth = 0; depth <= desired_depth; depth += 2) {
         table.clear();
         k = scoreab(sroot, depth, MINF, INF, 1);
-        if(overflow) k = oldk;
+        if(overflow) {
+            k = oldk;
+            cerr << "Overflow!" << endl;
+        } else {
+            m = sroot.children[sroot.best_move_index]->last_move;
+        }
         oldk = k;
-        if(!overflow) m = sroot.children[sroot.best_move_index]->last_move;
-        if(overflow) cerr << "Overflow!" << endl;
+        system_clock::time_point now = system_clock::now();
+        microseconds us = duration_cast<microseconds>(now - start);
         cerr << "Depth " << depth << ": " << k 
-            << "\tTable size: " << table.size() << "\tAllocated tree nodes: " 
-            << n_nodes << endl;
+            << "\tTable size: " << table.size() 
+            << "\tTree size: " << n_nodes
+            << "\tTime taken: " << us.count() << "us" << endl;
         if(k == INF || overflow) break;
-        //cerr << (int)sroot.best_move_index << endl;
-        //cerr << "Table size: " << table.size() << " Allocated: " << n_nodes << endl;
+        if(depth + 2 > desired_depth && us.count() * 10 < target.count()
+           && desired_depth + nstones <= 66) {
+            desired_depth += 2;
+        }
     }
     cerr << endl;
     overflow = false;
-    //m = sroot.children[sroot.best_move_index]->last_move;
+    penultimate_move = m;
     Move *move = nullptr;
     if(m != 64) {
         move = new Move(m / 8, m % 8);
     }
-    //cerr << "Desired: " << endl;
-    //disp(do_move(sroot.pos, m));
-    end = sroot.children.end();
-    for(it = sroot.children.begin(); it != end; it++) {
-        //cerr << "Found :" << endl;
-        //disp( (*it)->pos );
-        //cerr << ((*it)->pos == do_move(sroot.pos, m)) << endl;
-        desired = do_move(sroot.pos, m);
-        if(!((*it)->pos == desired)) {
-            prune(*it);
-            *it = nullptr;
-        }
-    }
-    for(it = sroot.children.begin(); it != end; it++) {
-        if(*it != nullptr) {
-            sroot = *(*it);
-            break;
-        }
-    }
-    //cerr << "Selected: " << endl;
-    //disp(sroot.pos);
-    //cerr << table.size() << endl;
     return move;
 }
 
 
-Move* Player::random_move(Board *pos) {
-    int n = 0;
-    unordered_map<int, int> moves;
-    for(int i = 0; i < 64; i++) {
-        if(pos->checkMove(new Move(i / 8, i % 8), side)) {
-            moves.insert({{n++, i}});
-        }
-    }
-    if(n == 0) return nullptr;
-    srand(time(nullptr));
-    int r = rand() % n, m = moves[r];
-    return new Move(m / 8, m % 8);
-}
-
-void Player::setpos(Board *pos) {
-    this->pos = pos;
-}
-
 int Player::rawminimax(sBoardNode &node, int desired_depth, int side_multiplier) {
-    //cerr << "Called for depth " << desired_depth << " with a " << a
-    //<< " b " << b << " side " << side_multiplier << endl;
-    //disp(node.pos);
-    /*int original_alpha = a;
-    auto it = table.find(node.pos);
-    Entry en;
-    if(it != table.end() && desired_depth == 0) {
-        if(desired_depth == 0 && node.pos == sroot.pos) {
-            cerr << "Here: ";
-            cerr << (int)en.type << endl;
-            cerr << (int)en.score << endl;
-        }
-        return table[node.pos].score;
-    }*/
-
-    if(desired_depth == 0) {
-        //en.type = 0;
-        //en.depth = 0;
-        //en.score  = (side_multiplier * deepen_eval(node));
-        return (side_multiplier * deepen_eval(node));
-        //table[node.pos] = en;
-        //return en.score;
-    }
-
+    if(desired_depth == 0) return (side_multiplier * deepen_eval(node));
     int best = MINF, current;
     if(node.children.size() == 0) deepen_eval(node);
-    //cerr << "Now a " << a << " b " << b << endl;
     for(unsigned int i = 0; i < node.children.size(); i++) {
-        //if(desired_depth == 0) break;
         current = -rawminimax(*(node.children[i]), desired_depth - 1,
                 -side_multiplier);
         if(current > best) {
             best = current;
-            //a = max(a, current);
-            //cerr << "a now " << a << " move " << (int)node.children[i]->last_move << endl;
             node.best_move_index = (unsigned char)i;
         }
-        //if(a >= b) break;
     }
-
     return best;
 }
 
 int Player::rawnegamax(sBoardNode &node, int desired_depth, int a, int b, 
         int side_multiplier) {
-    //cerr << "Called for depth " << desired_depth << " with a " << a
-    //<< " b " << b << " side " << side_multiplier << endl;
-    //disp(node.pos);
-    //int original_alpha = a;
-    //auto it = table.find(node.pos);
-    //Entry en;
-    /*if(it != table.end() && desired_depth == 0) {
-        if(desired_depth == 0 && node.pos == sroot.pos) {
-            cerr << "Here: ";
-            cerr << (int)en.type << endl;
-            cerr << (int)en.score << endl;
-        }
-        return table[node.pos].score;
-    }*/
-
-    if(desired_depth == 0) {
-        return (side_multiplier * deepen_eval(node));
-        /*en.type = 0;
-        en.depth = 0;
-        en.score = side_multiplier * deepen_eval(node);
-        table[node.pos] = en;
-        return en.score;*/
-    }
-
+    if(desired_depth == 0) return (side_multiplier * deepen_eval(node));
     int best = MINF, current;
-    //cerr << "Now a " << a << " b " << b << endl;
-    if(node.children.size() == 0) {
-        deepen_eval(node);
-    }
+    if(node.children.size() == 0) deepen_eval(node);
     for(unsigned int i = 0; i < node.children.size(); i++) {
-        //if(desired_depth == 0) break;
-        current = -rawnegamax(*(node.children[i]), desired_depth - 1, -b, -a,
-                -side_multiplier);
+        current = -rawnegamax(*(node.children[i]), desired_depth - 1, 
+                              -b, -a, -side_multiplier);
         if(current > best) {
             best = current;
             a = max(a, current);
-            //cerr << "a now " << a << " move " << (int)node.children[i]->last_move << endl;
             node.best_move_index = (unsigned char)i;
             if(a >= b) break;
         }
-    }
-    if(best == INF && false) {
-        cerr << "Called for depth " << desired_depth << " with a " << a
-        << " b " << b << " side " << side_multiplier << endl;
-        cerr << "Found forced win: " << endl;
-        disp(node.pos);
-        unsigned char m = node.children[node.best_move_index]->last_move;
-        cerr << "with move: " << (m/8) << " " << (m % 8) << endl;
-        cerr << (-negamax0(*(node.children[node.best_move_index])
-                    , desired_depth - 1, -b, -a, -side_multiplier)) << endl;
     }
     return best;
 }
 
 int Player::negamax0(sBoardNode &node, int desired_depth, int a, int b, 
         int side_multiplier) {
-    //cerr << "Called for depth " << desired_depth << " with a " << a
-    //<< " b " << b << " side " << side_multiplier << endl;
-    //disp(node.pos);
-    //int original_alpha = a;
     if(overflow) return 0;
     auto it = table.find(node.pos);
     Entry en;
     if(it != table.end() && desired_depth == 0) {
-        /*if(desired_depth == 0 && node.pos == sroot.pos) {
-            cerr << "Here: ";
-            cerr << (int)en.type << endl;
-            cerr << (int)en.score << endl;
-        }*/
         return table[node.pos].score;
     }
-
     if(desired_depth == 0) {
         en.type = 0;
         en.depth = 0;
@@ -280,20 +190,14 @@ int Player::negamax0(sBoardNode &node, int desired_depth, int a, int b,
         }
         return en.score;
     }
-
     int best = MINF, current;
-    //cerr << "Now a " << a << " b " << b << endl;
-    if(node.children.size() == 0) {
-        deepen_eval(node);
-    }
+    if(node.children.size() == 0) deepen_eval(node);
     for(unsigned int i = 0; i < node.children.size(); i++) {
-        //if(desired_depth == 0) break;
         current = -negamax0(*(node.children[i]), desired_depth - 1, -b, -a,
                 -side_multiplier);
         if(current > best) {
             best = current;
             a = max(a, current);
-            //cerr << "a now " << a << " move " << (int)node.children[i]->last_move << endl;
             node.best_move_index = (unsigned char)i;
         }
         if(a >= b) break;
@@ -303,10 +207,14 @@ int Player::negamax0(sBoardNode &node, int desired_depth, int a, int b,
 
 int Player::scoreab(sBoardNode &node, int desired_depth, int a, int b, 
         int side_multiplier) {
-    //cerr << "Called for depth " << desired_depth << " with a " << a
-    //<< " b " << b << " side " << side_multiplier << endl;
-    //disp(node.pos);
-    if(table.size() > TABLE_CUTOFF) {
+    if(overflow || table.size() > TABLE_CUTOFF) {
+        overflow = true;
+        return 0;
+    }
+    system_clock::time_point now = system_clock::now();
+    microseconds taken = duration_cast<microseconds>(now - start);
+    if(target.count() > 0 &&
+       taken.count() * 100l > target.count() * 95l) {
         overflow = true;
         return 0;
     }
@@ -314,82 +222,87 @@ int Player::scoreab(sBoardNode &node, int desired_depth, int a, int b,
     auto it = table.find(node.pos);
     Entry en;
     if(it != table.end() && (en = it->second).depth >= desired_depth) {
-        /*if(desired_depth == 0 && node.pos == sroot.pos) {
-            cerr << "Here: ";
-            cerr << (int)en.type << endl;
-            cerr << (int)en.score << endl;
-        }*/
         if(en.type == 0) return en.score;
         else if(en.type == (unsigned char)(-1)) a = max(a, en.score);
         else b = min(b, en.score);
         if (a >= b) return en.score;
     }
-
-
-    //if(desired_depth == 0) return side_multiplier * deepen_eval(node);
     if(desired_depth == 0) {
         en.type = 0;
         en.depth = 0;
         en.score = side_multiplier * deepen_eval(node);
-        //if(table[node.pos].score != 0) {
-        //cerr << table[node.pos].score << " " << en.score << endl;
-        //}
         table[node.pos] = en;
         return en.score;
     }
-    /*if(desired_depth <= 0) {
-    cerr << "Called for depth " << desired_depth << " with a " << a
-    << " b " << b << " side " << side_multiplier << endl;
-    disp(node.pos);
-        cerr << (it == table.end()) << endl;
-        cerr << table[node.pos].score << " " << (int)table[node.pos].type << endl;
-    }*/
-    
     int best = MINF, current;
-    if(node.children.size() == 0) {
-        deepen_eval(node);
-    }
-    //cerr << "Now a " << a << " b " << b << endl;
+    if(node.children.size() == 0) deepen_eval(node);
     for(unsigned int i = 0; i < node.children.size(); i++) {
-        //if(desired_depth == 0) break;
         current = -scoreab(*(node.children[i]), desired_depth - 1, -b, -a,
                 -side_multiplier);
         if(overflow) return 0;
         if(current > best) {
             best = current;
             a = max(a, current);
-            //cerr << "a now " << a << " move " << (int)node.children[i]->last_move << endl;
             node.best_move_index = (unsigned char)i;
         }
         if(a >= b) break;
     }
-
     en.score = best;
     if(best <= original_alpha) en.type = 1;
     else if(best >= b) en.type = -1;
     else en.type = 0;
     en.depth = desired_depth;
     table[node.pos] = en;
-    //if(table[node.pos].score == MINF && false) {
-        //cerr << "Called for depth " << desired_depth << " with a " << a
-        //    << " b " << b << " side " << side_multiplier << endl;
-        //disp(node.pos);
-        //cerr << node.pos.white << " " << node.pos.black << endl;
-    //}
-    //cerr << "Returned best " << best << endl;
-    //cerr << table[node.pos].score << " " << (int)table[node.pos].depth << 
-     //   " " << (int)table[node.pos].type << endl;
-    //cerr << node.children.size() << endl;
+    return best;
+}
+
+int Player::scoreabN(sBoard pos, int desired_depth, int a, int b, 
+        int side_multiplier) {
+    if(overflow || table.size() > TABLE_CUTOFF) {
+        overflow = true;
+        return 0;
+    }
+    int original_alpha = a;
+    auto it = table.find(pos);
+    Entry en;
+    if(it != table.end() && (en = it->second).depth >= desired_depth) {
+        if(en.type == 0) return en.score;
+        else if(en.type == (unsigned char)(-1)) a = max(a, en.score);
+        else b = min(b, en.score);
+        if (a >= b) return en.score;
+    }
+    if(desired_depth <= 0) {
+        en.type = 0;
+        en.depth = 0;
+        en.score = side_multiplier * eval(pos);
+        table[pos] = en;
+        return en.score;
+    }
+    int best = MINF, current;
+    vector<unsigned char> moves;
+    move_list(pos, moves);
+    for(auto it = moves.begin(); it != moves.end(); it++) {
+        current = -scoreabN(do_move(pos, *it), desired_depth - 1, -b, -a,
+                            -side_multiplier);
+        if(overflow) return 0;
+        if(current > best) {
+            best = current;
+            a = max(a, current);
+        }
+        if(a >= b) break;
+    }
+    en.score = best;
+    if(best <= original_alpha) en.type = 1;
+    else if(best >= b) en.type = -1;
+    else en.type = 0;
+    en.depth = desired_depth;
+    table[pos] = en;
     return best;
 }
 
 void Player::prune(sBoardNode *r) {
     if(r == nullptr) return;
-    //cerr << r << endl;
-    //cerr << "Pruning node: " << r->pos.white << " " << r->pos.black << endl;
-    //cerr << r->children.size() << endl;
     if(r->children.size() != 0) {
-        //cerr << r->children[0] << endl;
         for(unsigned int i = 0; i < r->children.size(); i++) {
             prune(r->children[i]);
         }
@@ -451,7 +364,6 @@ int Player::deepen_eval(sBoardNode &p) {
     }
 
     p.children.reserve(max(1, n_moves));
-    //p.children.resize(p.children.capacity());
     if(n_moves == 0) {
         sBoardNode *child = new sBoardNode();
         n_nodes++;
@@ -478,8 +390,6 @@ int Player::deepen_eval(sBoardNode &p) {
         if(ours < theirs) return MINF;
         return 0;
     }
-    //int ourcorners = us[0] + us[7] + us[56] + us[63];
-    //int theircorners = them[0] + them[7] + them[56] + them[63];
     int stones = (STONES * (ours - theirs)) / (ours + theirs),
         mobility = (MOBILITY * max(ENDM - w - b, 0) 
                  * (n_moves - n_other_moves)) / (n_moves + n_other_moves),
@@ -523,3 +433,19 @@ int Player::deepen_eval(sBoardNode &p) {
     
     //pos->doMove(m, side);
     //return nullptr;*/
+        /*else {
+            k = MINF;
+            vector<unsigned char> v;
+            move_list(sroot.pos, v);
+            for(auto it = v.begin();
+                     it != v.end(); it++) {
+                int current = -scoreabN(do_move(sroot.pos, *it), depth - 1,
+                                        MINF, INF, -1);
+                if(current > k) {
+                    k = current;
+                    m = *it;
+                }
+            }
+        }*/
+        //cerr << (int)sroot.best_move_index << endl;
+        //cerr << "Table size: " << table.size() << " Allocated: " << n_nodes << endl;
