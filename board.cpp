@@ -303,3 +303,66 @@ void BoardNode::update_score() {
     }
 }
 
+
+sBoard do_move(sBoard pos, unsigned char move) {
+    if(move == 64) {
+       pos.side = OTHER(pos.side);
+       return pos;
+    }
+
+    int X = move / 8, Y = move % 8, x, y;
+    unsigned long long flipped = 0ull;
+    bitset<64> us(pos.black), them(pos.white);
+    if(pos.side == WHITE) {
+        us ^= them;
+        them ^= us;
+        us ^= them;
+    }
+
+    for(int dx = -1; dx <= 1; dx++) {
+        for(int dy = -1; dy <= 1; dy++) {
+            if(dy == 0 && dx == 0) continue;
+            x = X;
+            y = Y;
+            do {
+                x += dx;
+                y += dy;
+            } while(in(x, y) && them[8*x + y]);
+
+            if(in(x, y) && us[8*x + y]) {
+                x = X;
+                y = Y;
+                flipped |= (1ull << (8*x + y));
+                x += dx;
+                y += dy;
+                while(them[8*x + y]) {
+                    flipped |= (1ull << (8*x + y));
+                    x += dx;
+                    y += dy;
+                }
+            }
+        }
+    }
+    if(pos.side == BLACK) {
+        pos.black |= flipped;
+        pos.white &= ~flipped;
+    } else {
+        pos.white |= flipped;
+        pos.black &= ~flipped;
+    }
+    pos.side = OTHER(pos.side);
+    return pos;
+}
+
+
+void disp(sBoard pos) {
+    cerr << ((pos.side == WHITE) ? "White" : "Black") << " to move:" << endl;
+    for(int y = 0; y < 8; y++) {
+        for(int x = 0; x < 8; x++) {
+            if(pos.white & (1ull << (8*x + y))) cerr << 'O';
+            else if(pos.black & (1ull << (8*x + y))) cerr << '8';
+            else cerr << '-';
+        }
+        cerr << endl;
+    }
+}
