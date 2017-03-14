@@ -49,6 +49,7 @@ Move *Player::doMove(Move *opponentsMove, int msLeft) {
 
     unsigned char o_move = 64;
     vector<sBoardNode*>::iterator it, end;
+    sBoard desired;
     if(opponentsMove != nullptr) {
         o_move = 8*opponentsMove->x + opponentsMove->y;
         //cerr << opponentsMove->x << " " << opponentsMove->y << endl;
@@ -58,11 +59,12 @@ Move *Player::doMove(Move *opponentsMove, int msLeft) {
         //cerr << "Desired: " << endl;
         //disp(do_move(sroot.pos, o_move));
         end = sroot.children.end();
+        desired = do_move(sroot.pos, o_move);
         for(it = sroot.children.begin(); it != end; it++) {
             //cerr << "Found: " << endl;
             //disp( (*it)->pos );
             //cerr << ((*it)->pos == do_move(sroot.pos, o_move)) << endl;
-            if(!((*it)->pos == do_move(sroot.pos, o_move))) {
+            if(!((*it)->pos == desired)) {
                 prune(*it);
                 *it = nullptr;
             }
@@ -78,7 +80,7 @@ Move *Player::doMove(Move *opponentsMove, int msLeft) {
     //disp(sroot.pos);
     //cerr << table.size() << endl;
 
-    unsigned char m;
+    unsigned char m = 0;
     int desired_depth = 8, oldk = 0, k;
     int nstones = __builtin_popcountll(sroot.pos.black) + __builtin_popcountll(sroot.pos.white);
     if(nstones >= 4 && nstones <= 42) desired_depth = 6;
@@ -86,7 +88,7 @@ Move *Player::doMove(Move *opponentsMove, int msLeft) {
     if(nstones >= 46) desired_depth = 67 - nstones;
     for(int depth = 0; depth <= desired_depth; depth += 2) {
         table.clear();
-        k = negamax0(sroot, depth, MINF, INF, 1);
+        k = scoreab(sroot, depth, MINF, INF, 1);
         if(overflow) k = oldk;
         oldk = k;
         if(!overflow) m = sroot.children[sroot.best_move_index]->last_move;
@@ -94,16 +96,13 @@ Move *Player::doMove(Move *opponentsMove, int msLeft) {
         cerr << "Depth " << depth << ": " << k 
             << "\tTable size: " << table.size() << "\tAllocated tree nodes: " 
             << n_nodes << endl;
-        if(k == INF) {
-            break;
-        }
+        if(k == INF || overflow) break;
         //cerr << (int)sroot.best_move_index << endl;
         //cerr << "Table size: " << table.size() << " Allocated: " << n_nodes << endl;
-        if(overflow) break;
     }
     cerr << endl;
     overflow = false;
-    m = sroot.children[sroot.best_move_index]->last_move;
+    //m = sroot.children[sroot.best_move_index]->last_move;
     Move *move = nullptr;
     if(m != 64) {
         move = new Move(m / 8, m % 8);
@@ -115,7 +114,8 @@ Move *Player::doMove(Move *opponentsMove, int msLeft) {
         //cerr << "Found :" << endl;
         //disp( (*it)->pos );
         //cerr << ((*it)->pos == do_move(sroot.pos, m)) << endl;
-        if(!((*it)->pos == do_move(sroot.pos, m))) {
+        desired = do_move(sroot.pos, m);
+        if(!((*it)->pos == desired)) {
             prune(*it);
             *it = nullptr;
         }
@@ -410,6 +410,7 @@ int Player::deepen_eval(sBoardNode &p) {
         them ^= us;
         us ^= them;
     }
+    unsigned long long ourull = us.to_ullong(), theirull = them.to_ullong();
 
     for(unsigned char move = 0; move < 64; move++) {
         if(us[move] || them[move]) continue;
@@ -472,12 +473,24 @@ int Player::deepen_eval(sBoardNode &p) {
         if(ours < theirs) return MINF;
         return 0;
     }
-    int ourcorners = us[0] + us[7] + us[56] + us[63];
-    int theircorners = them[0] + them[7] + them[56] + them[63];
-    return ((STONES * (ours - theirs)) / (ours + theirs) + 
-            (MOBILITY * max(ENDM - w - b, 0) * (n_moves - n_other_moves))
-            / (n_moves + n_other_moves)
-            + CORNERS * max(ENDC - w - b, 0) * (ourcorners - theircorners));
+    //int ourcorners = us[0] + us[7] + us[56] + us[63];
+    //int theircorners = them[0] + them[7] + them[56] + them[63];
+    int stones = (STONES * (ours - theirs)) / (ours + theirs),
+        mobility = (MOBILITY * max(ENDM - w - b, 0) 
+                 * (n_moves - n_other_moves)) / (n_moves + n_other_moves),
+        board_heur = 0;
+    board_heur += __builtin_popcountll(ourull & CENTER_MASK)
+           - 15 * __builtin_popcountll(ourull & RING_MASK)
+           + 30 * __builtin_popcountll(ourull & EDGE_MASK)
+           - 100 * __builtin_popcountll(ourull & DANGER_MASK)
+           + 300 * __builtin_popcountll(ourull & CORNER_MASK);
+    board_heur -= __builtin_popcountll(theirull & CENTER_MASK)
+           - 15 * __builtin_popcountll(theirull & RING_MASK)
+           + 30 * __builtin_popcountll(theirull & EDGE_MASK)
+           - 100 * __builtin_popcountll(theirull & DANGER_MASK)
+           + 300 * __builtin_popcountll(theirull & CORNER_MASK);
+    board_heur *= HEUR * max(ENDH - w - b, 0);
+    return (stones + mobility + board_heur);
 }
 
     /*int desired_depth;
