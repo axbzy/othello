@@ -15,8 +15,10 @@ class Player {
     bool overflow = false;
     int n_nodes = 0;
     const sBoard opening = { (1ull << (8*3 + 3)) | (1ull << (8*4 + 4)), 
-                             (1ull << (8*3 + 4)) | (1ull << (8*4 + 3)), BLACK };
+                             (1ull << (8*3 + 4)) | (1ull << (8*4 + 3)), 
+                             BLACK };
     unordered_map<sBoard, Entry, BoardHash> table;
+
 
     Move* random_move(Board *pos);
 

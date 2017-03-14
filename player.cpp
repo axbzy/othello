@@ -306,6 +306,10 @@ int Player::scoreab(sBoardNode &node, int desired_depth, int a, int b,
     //cerr << "Called for depth " << desired_depth << " with a " << a
     //<< " b " << b << " side " << side_multiplier << endl;
     //disp(node.pos);
+    if(table.size() > TABLE_CUTOFF) {
+        overflow = true;
+        return 0;
+    }
     int original_alpha = a;
     auto it = table.find(node.pos);
     Entry en;
@@ -350,6 +354,7 @@ int Player::scoreab(sBoardNode &node, int desired_depth, int a, int b,
         //if(desired_depth == 0) break;
         current = -scoreab(*(node.children[i]), desired_depth - 1, -b, -a,
                 -side_multiplier);
+        if(overflow) return 0;
         if(current > best) {
             best = current;
             a = max(a, current);
